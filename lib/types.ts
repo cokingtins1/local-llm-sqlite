@@ -16,6 +16,6 @@ export type VectorChunk = {
 		uuid?: string;
 		source: string;
 	};
-	chunkId: string | null;
+	chunkId: string;
 	pageContent: string;
 }[];

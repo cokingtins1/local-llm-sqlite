@@ -6,9 +6,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { VectorChunk } from "@/lib/types";
 import { PrismaClient } from "@prisma/client";
 import { Document } from "@langchain/core/documents";
-import { db, embeddings, initializeDatabase } from "@/prisma/_base";
-
-const prisma = new PrismaClient();
+import { db, embeddings, prisma } from "@/prisma/_base";
 
 export default async function updateDB() {
 	async function loadDocuments(path: string): Promise<VectorChunk> {
@@ -89,19 +87,49 @@ export default async function updateDB() {
 		return chunksWithIds;
 	}
 
+	async function getChunkId() {
+		const VectorChunks = await prisma.vectorStore.findMany({
+			select: { id: true, metadata: true, chunkId: true },
+		});
+
+		const existingChunks = VectorChunks.map((chunk) => {
+			if (chunk.metadata) {
+				const metadata = JSON.parse(chunk.metadata);
+				return metadata.chunkId;
+			}
+		}).filter((chunkId) => chunkId !== null);
+
+		const existingChunksSet = new Set(existingChunks);
+
+		return existingChunksSet;
+	}
+
+	async function updateChunkId() {
+		const vectorChunks = await prisma.vectorStore.findMany({
+			select: { id: true, metadata: true, chunkId: true },
+		});
+
+		for (const chunk of vectorChunks) {
+			if (chunk.metadata) {
+				const metadata = JSON.parse(chunk.metadata);
+				const metadataChunkId = metadata.chunkId;
+				if (metadataChunkId && chunk.chunkId !== metadataChunkId) {
+					await prisma.vectorStore.update({
+						where: { id: chunk.id },
+						data: { chunkId: metadataChunkId },
+					});
+				}
+			}
+		}
+	}
+
 	async function addToDB(chunks: VectorChunk) {
 		const chunksWithIds = calculateChunkIds(chunks);
 		const finalChunks = addIdToChunk(chunksWithIds);
-
-		const VectorChunks = await prisma.vectorStore.findMany({
-			select: { chunkId: true },
-		});
-		console.log("VectorChunks:", VectorChunks);
-
-		const existingChunks = VectorChunks.map((chunk) => chunk.chunkId);
+		const existingChunks = await getChunkId();
 
 		const newChunks = finalChunks.filter(
-			(chunk) => !existingChunks.includes(chunk?.chunkId)
+			(chunk) => !existingChunks.has(chunk.chunkId)
 		);
 
 		if (newChunks.length > 0) {
@@ -115,9 +143,8 @@ export default async function updateDB() {
 				},
 			}));
 
-			await initializeDatabase()
 			await db.addDocuments(documents);
-			// console.log(db);
+			await updateChunkId();
 		} else {
 			console.log("✅ No new new documents to add");
 		}

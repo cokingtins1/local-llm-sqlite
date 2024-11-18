@@ -24,12 +24,11 @@ export async function POST(req: Request) {
 	const { prompt } = result.data;
 
 	await updateDB();
+	// return NextResponse.json({ message: "success" });
 
-	// const stream = await queryDB(prompt);
+	const stream = await queryDB(prompt);
 
-	// return new NextResponse(stream, {
-	// 	headers: { "Content-Type": "text/plain" },
-	// });
-
-	return NextResponse.json({ message: "success" });
+	return new NextResponse(stream, {
+		headers: { "Content-Type": "text/plain" },
+	});
 }

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 
 import { LibSQLVectorStore } from "@langchain/community/vectorstores/libsql";
 import { OpenAIEmbeddings } from "@langchain/openai";
@@ -14,31 +15,18 @@ export const embeddings = new HuggingFaceInferenceEmbeddings({
 });
 
 // const libsqlClient = createClient({
-//   url: "libsql://[database-name]-[your-username].turso.io",
-//   authToken: "...",
+// 	url: process.env.TURSO_DATABASE_URL as string,
+// 	authToken: process.env.TURSO_AUTH_TOKEN,
 // });
 
 const libsqlClient = createClient({
-	url: "file:./dev.db",
+	url: process.env.TURSO_DATABASE_URL as string,
+	authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-async function ensureTableExists() {
-	const createTableQuery = `
-        CREATE TABLE IF NOT EXISTS "VectorStore" (
-            "id" TEXT NOT NULL PRIMARY KEY,
-            "chunkId" TEXT,
-            "content" TEXT,
-            "metadata" TEXT,
-            "embeddings" BLOB
-        );
-    `;
-
-	await libsqlClient.execute(createTableQuery);
-}
-
-export async function initializeDatabase() {
-	await ensureTableExists();
-}
+// const libsqlClient = createClient({
+// 	url: "file:./dev.db",
+// });
 
 export const db = new LibSQLVectorStore(embeddings, {
 	db: libsqlClient,
@@ -46,4 +34,5 @@ export const db = new LibSQLVectorStore(embeddings, {
 	column: "embeddings",
 });
 
-export const prisma = new PrismaClient();
+const adapter = new PrismaLibSQL(libsqlClient);
+export const prisma = new PrismaClient({ adapter });
